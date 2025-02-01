@@ -1,0 +1,395 @@
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local Library = {}
+Library.__index = Library
+
+-- Utility functions
+local function CreateInstance(className, properties)
+    local instance = Instance.new(className)
+    for property, value in pairs(properties) do
+        instance[property] = value
+    end
+    return instance
+end
+
+local function Lerp(a, b, t)
+    return a + (b - a) * t
+end
+
+function Library.new(title)
+    local gui = CreateInstance("ScreenGui", {
+        Name = "UILibrary",
+        Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    })
+
+    local main = CreateInstance("Frame", {
+        Name = "Main",
+        Size = UDim2.new(0, 400, 0, 300),
+        Position = UDim2.new(0.5, -200, 0.5, -150),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+        Parent = gui
+    })
+
+    -- Make the main frame draggable
+    local isDragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    main.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+            dragStart = input.Position
+            startPos = main.Position
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            main.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = false
+        end
+    end)
+
+    -- Create title
+    local titleBar = CreateInstance("TextLabel", {
+        Name = "Title",
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 16,
+        Font = Enum.Font.SourceSansBold,
+        Text = title,
+        Parent = main
+    })
+
+    -- Create container for elements
+    local container = CreateInstance("ScrollingFrame", {
+        Name = "Container",
+        Size = UDim2.new(1, -20, 1, -40),
+        Position = UDim2.new(0, 10, 0, 35),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 4,
+        Parent = main
+    })
+
+    local library = setmetatable({
+        gui = gui,
+        main = main,
+        container = container,
+        elements = {}
+    }, Library)
+
+    return library
+end
+
+function Library:CreateButton(text, callback)
+    local button = CreateInstance("TextButton", {
+        Name = "Button",
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(50, 50, 50),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.SourceSans,
+        Text = text,
+        Parent = self.container
+    })
+
+    button.MouseButton1Click:Connect(callback)
+    
+    -- Hover effect
+    button.MouseEnter:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        }):Play()
+    end)
+
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        }):Play()
+    end)
+
+    return button
+end
+
+function Library:CreateSlider(text, min, max, default, callback)
+    local sliderContainer = CreateInstance("Frame", {
+        Name = "SliderContainer",
+        Size = UDim2.new(1, 0, 0, 45),
+        BackgroundTransparency = 1,
+        Parent = self.container
+    })
+
+    local label = CreateInstance("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(1, 0, 0, 20),
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.SourceSans,
+        Text = text,
+        Parent = sliderContainer
+    })
+
+    local sliderBar = CreateInstance("Frame", {
+        Name = "SliderBar",
+        Size = UDim2.new(1, 0, 0, 4),
+        Position = UDim2.new(0, 0, 0, 25),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+        Parent = sliderContainer
+    })
+
+    local sliderFill = CreateInstance("Frame", {
+        Name = "SliderFill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(60, 120, 255),
+        Parent = sliderBar
+    })
+
+    local sliderButton = CreateInstance("TextButton", {
+        Name = "SliderButton",
+        Size = UDim2.new(0, 10, 0, 10),
+        Position = UDim2.new(0, -5, 0.5, -5),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        Text = "",
+        Parent = sliderFill
+    })
+
+    local value = default or min
+    local dragging = false
+
+    local function updateSlider(input)
+        local pos = math.clamp(
+            (input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X,
+            0,
+            1
+        )
+        value = Lerp(min, max, pos)
+        sliderFill.Size = UDim2.new(pos, 0, 1, 0)
+        callback(value)
+    end
+
+    sliderButton.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateSlider(input)
+        end
+    end)
+
+    return sliderContainer
+end
+
+function Library:CreateTextBox(placeholder, callback)
+    local textbox = CreateInstance("TextBox", {
+        Name = "TextBox",
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.SourceSans,
+        PlaceholderText = placeholder,
+        Text = "",
+        ClearTextOnFocus = false,
+        Parent = self.container
+    })
+
+    textbox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            callback(textbox.Text)
+        end
+    end)
+
+    return textbox
+end
+
+function Library:CreateDropdown(text, options, callback)
+    local dropdownContainer = CreateInstance("Frame", {
+        Name = "DropdownContainer",
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+        Parent = self.container
+    })
+
+    local dropdownButton = CreateInstance("TextButton", {
+        Name = "DropdownButton",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.SourceSans,
+        Text = text,
+        Parent = dropdownContainer
+    })
+
+    local optionsFrame = CreateInstance("Frame", {
+        Name = "Options",
+        Size = UDim2.new(1, 0, 0, #options * 25),
+        Position = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(35, 35, 35),
+        Visible = false,
+        Parent = dropdownContainer
+    })
+
+    local isOpen = false
+
+    dropdownButton.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        optionsFrame.Visible = isOpen
+        dropdownContainer.Size = isOpen and 
+            UDim2.new(1, 0, 0, 30 + #options * 25) or 
+            UDim2.new(1, 0, 0, 30)
+    end)
+
+    for i, option in ipairs(options) do
+        local optionButton = CreateInstance("TextButton", {
+            Name = "Option",
+            Size = UDim2.new(1, 0, 0, 25),
+            Position = UDim2.new(0, 0, 0, (i-1) * 25),
+            BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+            TextColor3 = Color3.fromRGB(255, 255, 255),
+            TextSize = 14,
+            Font = Enum.Font.SourceSans,
+            Text = option,
+            Parent = optionsFrame
+        })
+
+        optionButton.MouseButton1Click:Connect(function()
+            dropdownButton.Text = option
+            isOpen = false
+            optionsFrame.Visible = false
+            dropdownContainer.Size = UDim2.new(1, 0, 0, 30)
+            callback(option)
+        end)
+    end
+
+    return dropdownContainer
+end
+
+function Library:CreateColorPicker(text, callback)
+    local colorPickerContainer = CreateInstance("Frame", {
+        Name = "ColorPickerContainer",
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+        Parent = self.container
+    })
+
+    local colorDisplay = CreateInstance("Frame", {
+        Name = "ColorDisplay",
+        Size = UDim2.new(0, 30, 0, 20),
+        Position = UDim2.new(0, 5, 0.5, -10),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        Parent = colorPickerContainer
+    })
+
+    local label = CreateInstance("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(1, -45, 1, 0),
+        Position = UDim2.new(0, 40, 0, 0),
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.SourceSans,
+        Text = text,
+        Parent = colorPickerContainer
+    })
+
+    local pickerFrame = CreateInstance("Frame", {
+        Name = "PickerFrame",
+        Size = UDim2.new(0, 200, 0, 200),
+        Position = UDim2.new(1, 10, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+        Visible = false,
+        Parent = colorPickerContainer
+    })
+
+    -- Add color picker functionality (hue, saturation, value sliders)
+    -- This is a simplified version - you can expand it with full HSV functionality
+    local function updateColor(color)
+        colorDisplay.BackgroundColor3 = color
+        callback(color)
+    end
+
+    colorDisplay.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            pickerFrame.Visible = not pickerFrame.Visible
+        end
+    end)
+
+    return colorPickerContainer
+end
+
+function Library:CreateKeybind(text, defaultKey, callback)
+    local keybindContainer = CreateInstance("Frame", {
+        Name = "KeybindContainer",
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+        Parent = self.container
+    })
+
+    local label = CreateInstance("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(0.7, 0, 1, 0),
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.SourceSans,
+        Text = text,
+        Parent = keybindContainer
+    })
+
+    local keybindButton = CreateInstance("TextButton", {
+        Name = "KeybindButton",
+        Size = UDim2.new(0.3, -10, 1, -6),
+        Position = UDim2.new(0.7, 5, 0, 3),
+        BackgroundColor3 = Color3.fromRGB(50, 50, 50),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.SourceSans,
+        Text = defaultKey.Name,
+        Parent = keybindContainer
+    })
+
+    local currentKey = defaultKey
+    local listening = false
+
+    keybindButton.MouseButton1Click:Connect(function()
+        listening = true
+        keybindButton.Text = "..."
+    end)
+
+    UserInputService.InputBegan:Connect(function(input)
+        if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+            currentKey = input.KeyCode
+            keybindButton.Text = currentKey.Name
+            listening = false
+            callback(currentKey)
+        elseif input.KeyCode == currentKey then
+            callback(currentKey)
+        end
+    end)
+
+    return keybindContainer
+end
+
+return Library
